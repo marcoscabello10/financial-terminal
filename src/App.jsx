@@ -895,8 +895,14 @@ export default function FinancialTerminal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 8000,
-          system: buildSystemPrompt(sector),
+          max_tokens: 4000,
+          system: [
+            {
+              type: "text",
+              text: buildSystemPrompt(sector),
+              cache_control: { type: "ephemeral" },
+            }
+          ],
           messages: [{ role: "user", content }],
         }),
       });
@@ -909,7 +915,17 @@ export default function FinancialTerminal() {
       const match = cleaned.match(/\{[\s\S]*\}/);
       if (!match) throw new Error(`Respuesta inesperada. Fragmento: ${rawText.slice(0, 180)}`);
 
-      const parsed = JSON.parse(match[0]);
+      let parsed;
+      try {
+        parsed = JSON.parse(match[0]);
+      } catch {
+        let attempt = match[0].trimEnd().replace(/,\s*$/, "");
+        const opens = (attempt.match(/\{/g) || []).length;
+        const closes = (attempt.match(/\}/g) || []).length;
+        attempt += "}".repeat(Math.max(0, opens - closes));
+        try { parsed = JSON.parse(attempt); }
+        catch { throw new Error("Respuesta cortada. Intentá de nuevo."); }
+      }
       setAnalysis(parsed);
       setActiveTab("summary");
 
